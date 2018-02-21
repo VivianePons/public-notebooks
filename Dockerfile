@@ -2,7 +2,7 @@ FROM sagemath/sagemath:8.0-2
 
 # Pdflatex
 
-RUN sudo apt-get -q update && apt-get -qy dist-upgrade
+RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra texlive-fonts-recommended
 RUN sudo apt-get -q clean
 
