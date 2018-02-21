@@ -1,5 +1,7 @@
 FROM sagemath/sagemath:8.0-2
 
+ENV DEBIAN_FRONTEND noninteractive
+
 # Pdflatex
 
 #RUN apt-get -q update && apt-get -qy dist-upgrade
