@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra
-RUN sudo apt-get -qy imagemagick
+RUN sudo apt-get -qy install imagemagick
 
 RUN sudo apt-get -q clean
 
