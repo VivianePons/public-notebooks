@@ -9,4 +9,4 @@ The notebooks here are related to the following papers:
 
 [2] Viviane Pons. The Rise-Contact involution on Tamari Intervals.
 
-They present examples and implementations of the computations and algorithms described in the papers. You can run them yourself and experiment by [clicking on this binder link](https://mybinder.org/v2/gh/VivianePons/public-notebooks/master?filepath=TamariIntervalPosets)
+They present examples and implementations of the computations and algorithms described in the papers. You can run them yourself and experiment by [clicking on this binder link](https://mybinder.org/v2/gh/VivianePons/public-notebooks/master?filepath=TamariIntervalPosets). (Expect to wait a few minutes for the server to load).
