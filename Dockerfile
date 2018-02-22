@@ -1,9 +1,14 @@
 FROM sagemath/sagemath:8.0-2
 
-# Pdflatex
+# Ignore APT warnings about not having a TTY
+ENV DEBIAN_FRONTEND noninteractive
+
+# Pdflatex and Imagemagik
 
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
-RUN sudo apt-get -qy install texlive-latex-extra texlive-fonts-recommended
+RUN sudo apt-get -qy install texlive-latex-extra
+RUN sudo apt-get -qy imagemagick
+
 RUN sudo apt-get -q clean
 
 # Inspired from https://mybinder.readthedocs.io/en/latest/dockerfile.html#preparing-your-dockerfile
