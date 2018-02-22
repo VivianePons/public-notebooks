@@ -4,7 +4,7 @@
 
 This repo contains some Sage Jupyter notebooks and tutorials from past presentations and research. 
 
-You can run all notebooks presented here by just [clicking on this binder link](https://mybinder.org/v2/gh/VivianePons/public-notebooks/master). (Expect to wait a few minutes before it's loaded).
+You can run all notebooks presented here by just [clicking on this binder link](https://mybinder.org/v2/gh/VivianePons/public-notebooks/master). (Expect to wait a few minutes for the server to load).
 
 
 
