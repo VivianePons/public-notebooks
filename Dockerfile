@@ -3,11 +3,16 @@ FROM sagemath/sagemath:8.2
 # Ignore APT warnings about not having a TTY
 ENV DEBIAN_FRONTEND noninteractive
 
+# TODO Grahiz
+
 # Pdflatex and Imagemagik
 
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra
 RUN sudo apt-get -qy install imagemagick
+RUN sudo apt-get -qy install graphviz
+
+RUN sage -i dot2tex
 
 RUN sudo apt-get -q clean
 
