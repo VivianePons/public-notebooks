@@ -11,6 +11,7 @@ RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra
 RUN sudo apt-get -qy install imagemagick
 RUN sudo apt-get -qy install graphviz
+RUN sudo apt-get -qy install make
 
 RUN sage -i dot2tex
 
