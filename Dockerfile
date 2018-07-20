@@ -13,7 +13,8 @@ RUN sudo apt-get -qy install imagemagick
 RUN sudo apt-get -qy install graphviz
 RUN sudo apt-get -qy install make
 
-RUN sagemath/sagemath -i dot2tex
+RUN cd /home/sage
+RUN sage -i dot2tex
 
 RUN sudo apt-get -q clean
 
