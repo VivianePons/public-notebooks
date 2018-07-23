@@ -15,6 +15,7 @@ RUN sudo apt-get -qy install make
 
 RUN cd /home/sage
 RUN sage -i dot2tex
+RUN cd /
 
 RUN sudo apt-get -q clean
 
