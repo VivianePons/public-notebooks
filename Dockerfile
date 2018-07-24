@@ -3,8 +3,6 @@ FROM sagemath/sagemath-dev
 # Ignore APT warnings about not having a TTY
 ENV DEBIAN_FRONTEND noninteractive
 
-# TODO Grahiz
-
 # Pdflatex and Imagemagik
 
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
@@ -15,7 +13,7 @@ RUN sudo apt-get -qy install make
 
 RUN cd /home/sage
 RUN sage -i dot2tex
-RUN cd /
+RUN cd /home
 
 RUN sudo apt-get -q clean
 
