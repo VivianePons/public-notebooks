@@ -10,11 +10,11 @@ RUN pwd
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra
 RUN sudo apt-get -qy install imagemagick
-# RUN sudo apt-get -qy install graphviz
+RUN sudo apt-get -qy install graphviz
 # RUN sudo apt-get -qy install make
 
 # RUN cd /home/sage
-# RUN sage -i dot2tex
+RUN sage -pip install dot2tex
 # RUN cd /home
 
 RUN sudo apt-get -q clean
