@@ -464,11 +464,17 @@ class IntegerPoset(Relation):
     def is_total(self):
         return self.parent().is_total(self)
 
+    def is_woep(self):
+        return self.parent().is_woep(self)
+
     def is_woip(self):
         return self.parent().is_woip(self)
 
     def is_iwoip(self):
         return self.parent().is_iwoip(self)
+
+    def is_wof(self):
+        return self.parent().is_wof(self)
 
     def is_pip(self,sign = None):
         if sign is None:
@@ -581,6 +587,10 @@ class IntegerPosets(Relations):
         n = x.size()
         nbr = len(x.relations())
         return nbr == n*(n-1)/2
+
+    def is_woep(self, x):
+        return self.is_total(x)
+
 
     def is_woip(self, x):
         # Weak order intervals
