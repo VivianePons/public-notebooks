@@ -1,3 +1,9 @@
+# A lot of code
+# very messy
+# without any documentation
+# and the logic of research draft notes
+# At least I'm being honest...
+
 from sage.misc.cachefunc import cached_function
 from sage.matrix.constructor import Matrix
 from sage.combinat.ordered_tree import LabelledOrderedTree
@@ -5,7 +11,83 @@ from sage.combinat.ordered_tree import LabelledOrderedTrees
 from sage.geometry.polyhedron.all import Polyhedron
 from sage.misc.misc_c import prod
 from sage.rings.integer_ring import *
+from sage.combinat.posets.lattices import LatticePoset
+from sage.combinat.posets.posets import Poset
+from sage.functions.other import sqrt
+from sage.plot.line import line2d
+from sage.plot.plot3d.shapes2 import line3d
+from sage.combinat.combination import Combinations
+from sage.misc.misc import subsets
 
+
+
+### Useful documented function to use the messy ones
+
+def sWeakOrderLattice(s):
+    """
+    Return the s-weak order lattice on decreasing trees
+
+    Input:
+        - s, the weak composition
+    """
+    return LatticePoset(sWeakOrderLatticeTrees(s))
+
+
+def realization2d(s):
+    assert len(s) == 3
+    pols = proj3VerticesTree(s)
+    return plotPols(pols, axes=False, aspect_ratio = 1)
+
+def realization2dSTam(s):
+    assert len(s) == 3
+    pols = vtamari_pols_edges(s)
+    return plotPols(proj3Pols(pols), axes=False, aspect_ratio = 1)
+
+def realization3d(s):
+    assert len(s) == 4
+    pols = proj4VerticesTree(s)
+    return plotPols(pols)
+
+def realization3dSTam(s):
+    assert len(s) == 4
+    pols = vtamari_pols_edges(s)
+    return plotPols(proj4Pols(pols))
+
+
+############
+
+class LatticePrinter():
+
+    def __init__(self, s):
+        self._s = s
+        self._lattice = sWeakOrderLatticeTrees(s)
+
+    def _latex_(self):
+        SCALE = .15
+        st = "\\begin{tikzpicture}[every node/.style={inner sep = -.5pt}]\n"
+        matrix = proj3Matrix()
+        ids = {}
+        i = 0
+        for t in self._lattice:
+            ids[t] = i
+            p = get_tree_point(t)
+            pp = Matrix(p) * matrix
+            pp = [v.n() for v in pp[0]]
+            st+= "\\node(tree" + str(i) + ") at (" + str(pp[0]) + "," + str(pp[1]) + ") {\\scalebox{" + str(SCALE) +"}{$\n"
+            st+= latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]")
+            st+="\n$}};\n"
+            i+=1
+        st+="\n"
+        for t1,t2 in self._lattice.cover_relations():
+            st+="\draw (tree" + str(ids[t1]) +") -- (tree" + str(ids[t2]) + ");\n"
+        st+="\\end{tikzpicture}"
+        return st
+
+class TamLatticePrinter(LatticePrinter):
+
+    def __init__(self, s):
+        self._s = s
+        self._lattice = getSCatalanLattice(s)
 
 def getSPermutations(s):
     if len(s) == 0:
@@ -51,35 +133,40 @@ def getSFaceTrees(s):
         for sub in subsets(list(treeAscents(t))):
             yield get_face_tree(s, t, sub)
 
-def getSFaceTrees2(s, subset = None, axila = False):
-    def children(v, subset, axila):
-        if v == 1:
-            for t in getSFaceTrees2(s, subset, axila):
-                yield [t]
-        else:
-            for ss in subsets(subset):
-                for l in children(v-1, [w for w in subset if not w in ss], not axila):
-                    for t in getSFaceTrees2(s, ss, axila):
-                        yield l + [t]
-    if subset is None:
-        subset = [i for i in xrange(1, len(s)+1)]
-    if len(subset) == 0:
-        yield leaf()
-    else:
-        m = max(subset)
-        subset = [w for w in subset if w!= m]
-        v = s[m-1]
-        if v == 0:
-            for t in getSFaceTrees2(s, subset, axila):
-                yield LabelledOrderedTree([t], label = m)
-        else:
-            if axila:
-                for c in children(2*v-1, subset, True):
-                    l = leaf()
-                    yield LabelledOrderedTree([l] + c + [l], label = m)
-            else:
-                for c in children(2*v+1, subset, False):
-                    yield LabelledOrderedTree(c, label = m)
+def getSTamFaceTrees(s):
+    for t in getSCatalanTrees(s):
+        for sub in subsets(list(treeAscentsTam(t))):
+            yield get_face_tree(s,t,sub)
+
+#~ def getSFaceTrees2(s, subset = None, axila = False):
+    #~ def children(v, subset, axila):
+        #~ if v == 1:
+            #~ for t in getSFaceTrees2(s, subset, axila):
+                #~ yield [t]
+        #~ else:
+            #~ for ss in subsets(subset):
+                #~ for l in children(v-1, [w for w in subset if not w in ss], not axila):
+                    #~ for t in getSFaceTrees2(s, ss, axila):
+                        #~ yield l + [t]
+    #~ if subset is None:
+        #~ subset = [i for i in xrange(1, len(s)+1)]
+    #~ if len(subset) == 0:
+        #~ yield leaf()
+    #~ else:
+        #~ m = max(subset)
+        #~ subset = [w for w in subset if w!= m]
+        #~ v = s[m-1]
+        #~ if v == 0:
+            #~ for t in getSFaceTrees2(s, subset, axila):
+                #~ yield LabelledOrderedTree([t], label = m)
+        #~ else:
+            #~ if axila:
+                #~ for c in children(2*v-1, subset, True):
+                    #~ l = leaf()
+                    #~ yield LabelledOrderedTree([l] + c + [l], label = m)
+            #~ else:
+                #~ for c in children(2*v+1, subset, False):
+                    #~ yield LabelledOrderedTree(c, label = m)
 
 # tested
 # 022
@@ -87,10 +174,10 @@ def getSFaceTrees2(s, subset = None, axila = False):
 # 002
 # 0001
 # 0201
-def testGetSFaceTrees2(s):
-    L1 = list(getSFaceTrees(s))
-    L2 = list(getSFaceTrees2(s))
-    return len(L1) == len(L2) and set(L1) == set(L2)
+#~ def testGetSFaceTrees2(s):
+    #~ L1 = list(getSFaceTrees(s))
+    #~ L2 = list(getSFaceTrees2(s))
+    #~ return len(L1) == len(L2) and set(L1) == set(L2)
 
 def is_catalan_perm(sperm):
     perm = Word(sperm).standard_permutation()
@@ -428,10 +515,12 @@ def treeDirectAscents(tree):
         for v in rightExtremals(tree[i]):
             yield v, tree.label()
 
+
 def treeDirectDescents(tree):
     for i in xrange(len(tree)-1,0,-1):
         for v in leftExtremals(tree[i]):
             yield tree.label(), v
+
 
 def treeAscents(tree):
     for vv in treeDirectAscents(tree):
@@ -439,6 +528,36 @@ def treeAscents(tree):
     for child in tree:
         for vv in treeAscents(child):
             yield vv
+
+def treeAscentsTam(tree):
+    for i in xrange(len(tree)-1):
+        c = tree[i]
+        if len(c) > 0:
+            yield c.label(), tree.label()
+    for child in tree:
+        for vv in treeAscentsTam(child):
+            yield vv
+
+# checked
+# 002
+# 003
+# 011
+# 022
+# 033
+# 0001
+# 0002
+# 0003
+# 0103
+# 0113
+# 0223
+# 0333
+# 02233
+def checkTreeAscentsTam(s):
+    L = getSCatalanLattice(s)
+    for tree in L:
+        if not len(L.upper_covers(tree)) == len(list(treeAscentsTam(tree))):
+            return False
+    return True
 
 def isTreeAscentCondi(s, inversions, asc):
     a,c = asc
@@ -781,31 +900,95 @@ def tree_from_inversions(s, inversions, subset = None):
     return LabelledOrderedTree([tree_from_inversions(s,inversions,Ci) for Ci in subsets], label = c)
 
 def face_tree_from_inversions(s, inversions, subset = None):
-    if subset is None:
-        n = len(s)
-        subset = {i for i in xrange(1,n+1)}
-    if len(subset) == 0:
-        return leaf()
-    c = max(subset)
-    subsets = [set() for i in xrange(s[c-1]+1 + s[c-1])]
-    subset.remove(c)
-    for a in subset:
-        i = inversions.get((c,a),0)
-        subsets[i*2].add(a)
-    return LabelledOrderedTree([face_tree_from_inversions(s,inversions,Ci) for Ci in subsets], label = c)
+    tree_invs = {}
+    ascents = []
+    for b,a in inversions:
+        if not inversions[(b,a)] in NN:
+            ascents.append((a,b))
+            i = int(inversions[(b,a)])
+            if i != 0:
+                tree_invs[(b,a)] = i
+        else:
+            tree_invs[(b,a)] = inversions[(b,a)]
+    return SWeakFace(tree_from_inversions(s,tree_invs), ascents)
 
 def face_tree_inversions(ftree):
-    invs = tree_inversions_dict(ftree)
-    for b,a in invs:
-        invs[(b,a)] = invs[(b,a)]/ZZ(2)
-    return invs
+    return ftree.inversions()
+
+COLSEP = .1
+
+class SWeakFace():
+
+    def __init__(self, t, ascents):
+        self._t = t
+        self._ascents = tuple(ascents)
+        self._marked = {i for (i,j) in self._ascents}
+        invs = tree_inversions_dict(t)
+        s = getSFromTree(t)
+        self._s = s
+        for a,b in ascents:
+            invs[(b,a)] = invs.get((b,a),0) + ZZ(1)/ZZ(2)
+        self._invs = transitive_closure(s, invs)
+
+    def s(self):
+        return self._s
+
+    def tree(self):
+        return self._t
+
+    def ascents(self):
+        return self._ascents
+
+    def inversions(self):
+        return self._invs
+
+    def dimension(self):
+        return len(self._ascents)
+
+    def __repr__(self):
+        return str((self._t, self._ascents))
+
+    def _get_ascents_letters(self):
+        self._n=0
+        def r(t):
+            if t.label() in self._marked:
+                yield "".join((chr(ord(x) + 49) for x in str(self._n)))
+            self._n+=1
+            for c in t:
+                for l in r(c):
+                    yield l
+        for l in r(self._t):
+            yield l
+
+    def __eq__(self, other):
+        return isinstance(other, SWeakFace) and other.ascents() == self.ascents() and other.tree() == self.tree()
+
+    def __hash__(self):
+        return hash((self.ascents(), self.tree()))
+
+    def _latex_(self):
+        L = self._t._latex_()
+        L = L.replace("column sep=.3cm","column sep="+str(COLSEP)+"cm")
+        L = L.replace("[draw,circle]","[draw,circle,fill=white]")
+        for l in self._get_ascents_letters():
+            rfrom = "\\node" + l +"}{\\node[draw,circle,fill=white]"
+            rto = "\\node" + l +"}{\\node[draw,circle,fill=red!50]"
+            L = L.replace(rfrom, rto)
+        return L
+
+    def is_border_face(self):
+        if len(self.tree()[-1]) >0:
+            return True
+        def unmarked_left(t):
+            if len(t) == 0:
+                return False
+            if not t.label() in self._marked:
+                return True
+            return unmarked_left(t[0])
+        return unmarked_left(self.tree()[0])
 
 def get_face_tree(s, tree, ascents):
-    invs = tree_inversions_dict(tree)
-    for a,b in ascents:
-        invs[(b,a)] = invs.get((b,a),0) + ZZ(1)/ZZ(2)
-    invs = transitive_closure(s, invs)
-    return face_tree_from_inversions(s, invs)
+    return SWeakFace(tree, ascents)
 
 def interval_to_face_tree(tree1, tree2):
     s = getSFromTree(tree1)
@@ -828,7 +1011,7 @@ def belong_to_face(tree, ftree):
 def included_in_face(ftree1, ftree2):
     tinvs = face_tree_inversions(ftree1)
     finvs = face_tree_inversions(ftree2)
-    n = ftree1.label()
+    n = ftree1.tree().label()
     for a in xrange(1,n+1):
         for b in xrange(a+1,n+1):
             i,j = tinvs.get((b,a),0), finvs.get((b,a),0)
@@ -839,12 +1022,10 @@ def included_in_face(ftree1, ftree2):
     return True
 
 def dimension_tree_face(ftree):
-    if len(ftree) == 0:
-        return 0
-    return sum(1 for i in xrange(1,len(ftree),2) if len(ftree[i]) >0) + sum(dimension_tree_face(t) for t in ftree)
+    return ftree.dimension()
 
 def remove_face(s,ftree):
-    n = ftree.label()
+    n = ftree.tree().label()
     invs = face_tree_inversions(ftree)
     for c in xrange(3,n+1):
         for b in xrange(2,c):
@@ -855,7 +1036,7 @@ def remove_face(s,ftree):
     return False
 
 def border_face(ftree):
-    return len(ftree[0]) > 0 or len(ftree[-1]) > 0
+    return ftree.is_border_face()
 
 def tree_versions(tree):
     counts = {}
@@ -1277,11 +1458,12 @@ def getProj4Polyhedron(s):
     proj = lambda x: list(Matrix(x)*matrix)[0]
     return pol.projection(proj)
 
+#def plotPols(pols, **args):
+    #plots = [p.plot(**args) for p in pols]
+    #return sum(plots)
+
 def plotPols(pols, **args):
-    plots = [p.plot(**args) for p in pols]
-    return sum(plots)
-
-
+    return sum(pols).show(**args)
 
 def treePolyhedraProj3(s):
     pols = treePolyhedra(s)
@@ -1665,11 +1847,7 @@ def proj3Vertices(s):
 
 def proj3VerticesTree(s):
     pols = getVerticesTree(s)
-    matrix = Matrix([[1, 0], [0, 1], [-ZZ(1)/ZZ(2), -ZZ(1)/ZZ(2)]])
-    proj = lambda x: list(Matrix(x)*matrix)[0]
-    projs = [p.projection() for p in pols] # ??
-    pols = [p.projection(proj) for p in pols]
-    return pols
+    return proj3Pols(pols)
 
 def proj4Vertices(s):
     pols = getVertices(s)
@@ -1681,11 +1859,7 @@ def proj4Vertices(s):
 
 def proj4VerticesTree(s):
     pols = getVerticesTree(s)
-    matrix = Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-ZZ(1)/3, -ZZ(1)/3, -ZZ(1)/3]])
-    proj = lambda x: list(Matrix(x)*matrix)[0]
-    projs = [p.projection() for p in pols] # ??
-    pols = [p.projection(proj) for p in pols]
-    return pols
+    return proj4Pols(pols)
 
 def proj4VerticesTreeCoord(s, coord):
     pols = getVerticesTreeCoord(s, coord)
@@ -1841,6 +2015,14 @@ def vtamari_pols(s):
     pols = [pol for pol in pols if not pol is None]
     return pols
 
+def vtamari_pols_edges(s):
+    pols = vtamari_pols(s)
+    edges = set()
+    for pol in pols:
+        for f in pol.faces(1):
+            edges.add(Polyhedron(f.vertices()))
+    return list(edges)
+
 def check_vtamari_remove_face(s):
     FACES = get_facet_tree_faces(s)
     d = len(s) - 1
@@ -1980,11 +2162,29 @@ def proj4FacetVertices(facet):
     pols = [p.projection(proj) for p in pols]
     return pols
 
+def proj3Matrix():
+    return  Matrix([[-ZZ(1),-ZZ(1)], [-(sqrt(3)/2+1), -ZZ(3)/ZZ(2)], [-ZZ(1), -ZZ(2)]])
+
+def proj3Pol(pol):
+    #matrix = Matrix([[1, 0], [0, 1], [-ZZ(1)/ZZ(2), -ZZ(1)/ZZ(2)]])
+    #matrix = Matrix([[ZZ(1),ZZ(1)], [ZZ(3)/ZZ(2), sqrt(3)/2+1], [ZZ(2), ZZ(1)]])
+    matrix =proj3Matrix()
+    proj = lambda x: list(Matrix(x)*matrix)[0]
+    v = pol.vertices_list()
+    v = [Matrix(x)*matrix for x in v]
+    v = [list(p[0]) for p in v]
+    return line2d(v)
+
 def proj4Pol(pol):
     matrix = Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-ZZ(1)/3, -ZZ(1)/3, -ZZ(1)/3]])
     proj = lambda x: list(Matrix(x)*matrix)[0]
-    pol.projection()
-    return pol.projection(proj)
+    v = pol.vertices_list()
+    v = [Matrix(x)*matrix for x in v]
+    v = [list(p[0]) for p in v]
+    return line3d(v)
+
+def proj3Pols(pols):
+    return [proj3Pol(pol) for pol in pols]
 
 def proj4Pols(pols):
     return [proj4Pol(pol) for pol in pols]
