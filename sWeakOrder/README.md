@@ -1,4 +1,4 @@
-# Integer Posets
+# s-Weak Order and s-Permutahedron
 
 [![Binder](https://beta.mybinder.org/badge.svg)](https://mybinder.org/v2/gh/VivianePons/public-notebooks/master?filepath=sWeakOrder)
 
