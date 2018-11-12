@@ -46,12 +46,12 @@ def realization2dSTam(s):
 def realization3d(s):
     assert len(s) == 4
     pols = proj4VerticesTree(s)
-    return plotPols(pols)
+    return plotPols(pols, viewer = "threejs", frame = False)
 
 def realization3dSTam(s):
     assert len(s) == 4
     pols = vtamari_pols_edges(s)
-    return plotPols(proj4Pols(pols))
+    return plotPols(proj4Pols(pols), viewer = "threejs", frame = False)
 
 
 ############
