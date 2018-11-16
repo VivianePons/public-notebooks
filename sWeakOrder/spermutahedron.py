@@ -27,32 +27,79 @@ def sWeakOrderLattice(s):
     """
     Return the s-weak order lattice on decreasing trees
 
-    Input:
+    INPUT:
         - s, the weak composition
     """
     return LatticePoset(sWeakOrderLatticeTrees(s))
 
 
 def realization2d(s):
+    """
+    Shows the 2d realization of the s-Permutahedron
+    INPUT :
+
+        - s, the weak composition of length 3
+    """
     assert len(s) == 3
     pols = proj3VerticesTree(s)
-    return plotPols(pols, axes=False, aspect_ratio = 1)
+    plotPols(pols, axes=False, aspect_ratio = 1)
 
 def realization2dSTam(s):
+    """
+    Shows the 2d realization of the s-Associahderon
+    INPUT :
+
+        - s, the weak composition of length 3
+    """
     assert len(s) == 3
     pols = vtamari_pols_edges(s)
     return plotPols(proj3Pols(pols), axes=False, aspect_ratio = 1)
 
+def realization2dBoth(s):
+    """
+    Shows the 2d realization of the s-Permutahedron and s-Associahedron together
+    INPUT :
+
+        - s, the weak composition of length 3
+    """
+    assert len(s) == 3
+    pols1 = proj3VerticesTree(s, color='blue')
+    pols2 = proj3Pols(vtamari_pols_edges(s), color='red')
+    return plotPols(pols1+pols2, axes=False, aspect_ratio=1)
+
 def realization3d(s):
+    """
+    Shows the 3d realization of the s-Permutahedron
+    INPUT :
+
+        - s, the weak composition of length 4
+    """
     assert len(s) == 4
     pols = proj4VerticesTree(s)
     return plotPols(pols, viewer = "threejs", frame = False)
 
 def realization3dSTam(s):
+    """
+    Shows the 2d realization of the s-Associahderon
+    INPUT :
+
+        - s, the weak composition of length 4
+    """
     assert len(s) == 4
     pols = vtamari_pols_edges(s)
     return plotPols(proj4Pols(pols), viewer = "threejs", frame = False)
 
+def realization3dBoth(s):
+    """
+    Shows the 2d realization of the s-Permutahedron and s-Associahedron together
+    INPUT :
+
+        - s, the weak composition of length 3
+    """
+    assert len(s) == 4
+    pols1 = proj4VerticesTree(s, color='blue')
+    pols2 = proj4Pols(vtamari_pols_edges(s), color='red')
+    return plotPols(pols1+pols2, viewer = "threejs", frame = False)
 
 ############
 
@@ -61,9 +108,10 @@ class LatticePrinter():
     def __init__(self, s):
         self._s = s
         self._lattice = sWeakOrderLatticeTrees(s)
+        self._scale = .15
 
     def _latex_(self):
-        SCALE = .15
+        SCALE = self._scale
         st = "\\begin{tikzpicture}[every node/.style={inner sep = -.5pt}]\n"
         matrix = proj3Matrix()
         ids = {}
@@ -74,7 +122,7 @@ class LatticePrinter():
             pp = Matrix(p) * matrix
             pp = [v.n() for v in pp[0]]
             st+= "\\node(tree" + str(i) + ") at (" + str(pp[0]) + "," + str(pp[1]) + ") {\\scalebox{" + str(SCALE) +"}{$\n"
-            st+= latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]")
+            st+= self._object_printer(t)
             st+="\n$}};\n"
             i+=1
         st+="\n"
@@ -83,11 +131,24 @@ class LatticePrinter():
         st+="\\end{tikzpicture}"
         return st
 
+    def _object_printer(self, t):
+        return latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]")
+
 class TamLatticePrinter(LatticePrinter):
 
     def __init__(self, s):
+        self._scale = .15
         self._s = s
         self._lattice = getSCatalanLattice(s)
+
+class NutreeLatticePrinter(TamLatticePrinter):
+
+    def __init__(self, s):
+        TamLatticePrinter.__init__(self,s)
+        self._scale = .1
+
+    def _object_printer(self, t):
+        return latex(STreeToNuTree(t))
 
 def getSPermutations(s):
     if len(s) == 0:
@@ -1625,6 +1686,14 @@ def fix_tree_point(tree, P):
                 #P[2] += ZZ(1)/3
                 #return
 
+def get_tree_point_nofix(tree):
+    n = tree.label()
+    P = [0 for i in xrange(n)]
+    for (b,a), v in tree_inversions(tree):
+        P[a-1] += v
+        P[b-1] -= v
+    return P
+
 # the second fix
 def get_tree_point_secondfix(tree):
     n = tree.label()
@@ -1685,6 +1754,27 @@ def get_tree_point34(tree):
                         k+= factor /3 * (p1 - p3)
             else:
                 k+=scaling
+                pass
+        P[a-1] +=k
+        P[b-1] -= k
+    return P
+
+# fix without stetch
+def get_tree_point_justfix(tree):
+    n = tree.label()
+    s = getSFromTree(tree)
+    P = [0 for i in xrange(n)]
+    inv = tree_inversions_dict(tree)
+    factor = prod(i for i in xrange(3,len(s)))
+    for (b,a) in inv:
+        k = factor*inv[(b,a)]
+        if b >= 3 and b < len(s):
+            if inv[(b,a)] < s[b-1]:
+                for c in xrange(1,b):
+                    p1 = inv.get((b+1,c),0)
+                    p3 = inv.get((b+1,b),0)
+                    k+= (p1 - p3)
+            else:
                 pass
         P[a-1] +=k
         P[b-1] -= k
@@ -1845,9 +1935,9 @@ def proj3Vertices(s):
     pols = [p.projection(proj) for p in pols]
     return pols
 
-def proj3VerticesTree(s):
+def proj3VerticesTree(s, **options):
     pols = getVerticesTree(s)
-    return proj3Pols(pols)
+    return proj3Pols(pols, **options)
 
 def proj4Vertices(s):
     pols = getVertices(s)
@@ -1857,7 +1947,7 @@ def proj4Vertices(s):
     pols = [p.projection(proj) for p in pols]
     return pols
 
-def proj4VerticesTree(s):
+def proj4VerticesTree(s, **options):
     pols = getVerticesTree(s)
     return proj4Pols(pols)
 
@@ -2165,7 +2255,7 @@ def proj4FacetVertices(facet):
 def proj3Matrix():
     return  Matrix([[-ZZ(1),-ZZ(1)], [-(sqrt(3)/2+1), -ZZ(3)/ZZ(2)], [-ZZ(1), -ZZ(2)]])
 
-def proj3Pol(pol):
+def proj3Pol(pol, **options):
     #matrix = Matrix([[1, 0], [0, 1], [-ZZ(1)/ZZ(2), -ZZ(1)/ZZ(2)]])
     #matrix = Matrix([[ZZ(1),ZZ(1)], [ZZ(3)/ZZ(2), sqrt(3)/2+1], [ZZ(2), ZZ(1)]])
     matrix =proj3Matrix()
@@ -2173,21 +2263,23 @@ def proj3Pol(pol):
     v = pol.vertices_list()
     v = [Matrix(x)*matrix for x in v]
     v = [list(p[0]) for p in v]
-    return line2d(v)
+    return line2d(v, **options)
 
-def proj4Pol(pol):
+def proj4Pol(pol, **options):
     matrix = Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-ZZ(1)/3, -ZZ(1)/3, -ZZ(1)/3]])
     proj = lambda x: list(Matrix(x)*matrix)[0]
     v = pol.vertices_list()
     v = [Matrix(x)*matrix for x in v]
     v = [list(p[0]) for p in v]
-    return line3d(v)
+    if len(set(tuple(p) for p in v)) == 1:
+        return point3d(v[0], **options)
+    return line3d(v, **options)
 
-def proj3Pols(pols):
-    return [proj3Pol(pol) for pol in pols]
+def proj3Pols(pols, **options):
+    return [proj3Pol(pol, **options) for pol in pols]
 
-def proj4Pols(pols):
-    return [proj4Pol(pol) for pol in pols]
+def proj4Pols(pols, **options):
+    return [proj4Pol(pol, **options) for pol in pols]
 
 def proj4FacetConvexHull(facet):
     matrix = Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-ZZ(1)/3, -ZZ(1)/3, -ZZ(1)/3]])
@@ -3247,6 +3339,128 @@ def project_edge23_4():
 
 
 
-def projection(perms, direction):
-    pass
+######## nu trees ##########
+
+def sToPath(s):
+    p = []
+    for a in reversed(s):
+        p.append(1)
+        p.extend([0]*a)
+    return tuple(p)
+
+def path_matrix(p):
+    n = sum(1 for i in p if i == 0) + 1
+    m = sum(p) + 1
+    M = [[True]*n for i in xrange(m)]
+    i,j = 0,0
+    for v in p:
+        if v == 1:
+            for k in xrange(i+1,n):
+                M[j][k] = False
+            j+=1
+        else:
+            i+=1
+    return M
+
+def is_compatible(P,p,M):
+    i1,j1 = p
+    for i2,j2 in P:
+        if i2 < i1 and j2 < j1 and M[j2][i1]:
+            return False
+    return True
+
+def readNodes(t,L, c = 0):
+    L[c]+=1
+    if len(t) == 0:
+        return c
+    c+=1
+    for child in reversed(t):
+        c = readNodes(child,L,c)
+    return c
+
+def STreeToNuTree(t):
+    s = getSFromTree(t)
+    path = sToPath(s)
+    mat = path_matrix(path)
+    L = [0]*(len(s)+1)
+    readNodes(t,L)
+    n = len(mat[0])
+    m = len(mat)
+    P = []
+    for j in xrange(len(L)):
+        k = L[j]
+        for i in xrange(n-1,-1,-1):
+            if k == 0:
+                break
+            if M[j][i] and is_compatible(P,(i,j),mat):
+                P.append((i,j))
+                k-=1
+    return NuTree(path,tuple(P))
+
+
+
+class NuTree():
+
+    def __init__(self, path, points):
+        self._path = path
+        self._points = points
+        n = sum(1 for i in p if i == 0) + 1
+        m = sum(p) + 1
+        M = [[False]*n for i in xrange(m)]
+        for i,j in points:
+            M[j][i] = True
+        self._point_matrix = M
+        self._n = n
+        self._m = m
+        self._construct_point_graph()
+
+    def _construct_point_graph(self):
+        G = Graph()
+        for i,j in self._points:
+            for k in xrange(j-1,-1,-1):
+                if self._point_matrix[k][i]:
+                    G.add_edge(((i,j),(i,k)))
+                    break
+            for k in xrange(i+1,self._n):
+                if self._point_matrix[j][k]:
+                    G.add_edge(((i,j),(k,j)))
+                    break
+        self._point_graph = G
+
+    def __repr__(self):
+        return str((self._path,self._points))
+
+    def __eq__(self, other):
+        return isinstance(other,NuTree) and self._path == other._path and self._points == other._points
+
+    def __hash__(self):
+        return hash((self._path, self._points))
+
+    def _latex_(self):
+        off = .1
+        st = "\\begin{tikzpicture}\n"
+        point_str = ""
+        x,y = 0,0
+        for v in self._path:
+            if v == 1:
+                x1 = x
+                y1 = y+1
+            else:
+                x1 = x+1
+                y1 = y
+            st += "\\draw[line width = 4] (" + str(x) + "," + str(y) + ") -- (" + str(x1) + "," + str(y1) + ");\n"
+            point_str += "\\draw[fill, radius=0.15] (" + str(x) + "," + str(y) +") circle;\n"
+            x,y = x1,y1
+        point_str += "\\draw[fill, radius=0.15] (" + str(x) + "," + str(y) +") circle;\n"
+        st += point_str
+        st+="\n"
+
+        for i,j in self._points:
+            st+= "\\draw[red, fill, radius=0.15] (" + str(i-off) + "," + str(j+off) + ") circle;\n"
+        st+="\n"
+        for p1,p2,l in self._point_graph.edges():
+            st+= "\\draw[red, line width = 4] ("+ str(p1[0]-off) + "," + str(p1[1]+off) + ") -- (" + str(p2[0]-off) + "," + str(p2[1]+off) + ");\n"
+        st+="\\end{tikzpicture}"
+        return st
+
 
