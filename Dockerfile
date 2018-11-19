@@ -22,3 +22,4 @@ RUN sudo apt-get -q clean
 # Inspired from https://mybinder.readthedocs.io/en/latest/dockerfile.html#preparing-your-dockerfile
 # Make sure the contents of our repo are in ${HOME}
 COPY . ${HOME}
+ENV MAGICK_CONFIGURE_PATH ${HOME}/app/.magick
