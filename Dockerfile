@@ -17,9 +17,12 @@ RUN sudo apt-get -qy install graphviz
 RUN sage -pip install dot2tex
 # RUN cd /home
 
+ARG imagemagic_config=/etc/ImageMagick-6/policy.xml
+
+RUN if [[ -f $imagemagic_config ]] ; then sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/g' $imagemagic_config ; else echo did not see file $imagemagic_config ; fi
+
 RUN sudo apt-get -q clean
 
 # Inspired from https://mybinder.readthedocs.io/en/latest/dockerfile.html#preparing-your-dockerfile
 # Make sure the contents of our repo are in ${HOME}
 COPY . ${HOME}
-ENV MAGICK_CONFIGURE_PATH ${HOME}/app/.magick
