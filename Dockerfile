@@ -10,6 +10,7 @@ RUN pwd
 RUN sudo apt-get -q update && sudo apt-get -qy dist-upgrade
 RUN sudo apt-get -qy install texlive-latex-extra
 RUN sudo apt-get -qy install imagemagick
+COPY ./app/.magic/policy.xml /etc/ImageMagick-6/policy.xml
 RUN sudo apt-get -qy install graphviz
 # RUN sudo apt-get -qy install make
 
@@ -17,7 +18,6 @@ RUN sudo apt-get -qy install graphviz
 RUN sage -pip install dot2tex
 # RUN cd /home
 
-ARG imagemagic_config=/etc/ImageMagick-6/policy.xml
 
 
 RUN sudo apt-get -q clean
