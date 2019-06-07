@@ -103,12 +103,14 @@ def realization3dBoth(s):
 
 ############
 
+
 class LatticePrinter():
 
     def __init__(self, s):
         self._s = s
         self._lattice = sWeakOrderLatticeTrees(s)
-        self._scale = .15
+        # self._scale = .15
+        self._scale = .2
 
     def _latex_(self):
         SCALE = self._scale
@@ -137,7 +139,8 @@ class LatticePrinter():
 class TamLatticePrinter(LatticePrinter):
 
     def __init__(self, s):
-        self._scale = .15
+        #self._scale = .15
+        self._scale = .2
         self._s = s
         self._lattice = getSCatalanLattice(s)
 
@@ -474,7 +477,7 @@ def rightExtractions(tree):
             yield T1,T2
 
 def leftExtractions(tree):
-    if not haStrictLeftChild(tree):
+    if not hasStrictLeftChild(tree):
         T1 = tree[-1]
         T2 = tree.clone()
         T2[-1] = leaf()
@@ -536,6 +539,46 @@ def sweak_tree_succ(tree):
             S.set_immutable()
             yield S
 
+def sweak_tree_add_ascent(tree, ab):
+    a,b = ab
+    s = getSFromTree(tree)
+    d = tree_inversions_dict(tree)
+    d[(b,a)] = d.get((b,a),0) + 1
+    d = transitive_closure(s,d)
+    return tree_from_inversions(s,d)
+
+def tree_moves_right(tree,a):
+    n = tree.label()
+    d = tree_inversions_dict(tree)
+    s = getSFromTree(tree)
+    possibles = [b for b in xrange(1,n+1) if b != a and a in sub_tree_set(tree,b) and d.get((b,a),0) < s[b-1]]
+    if len(possibles) > 0:
+        b = min(possibles)
+        d[(b,a)] = d.get((b,a),0) + 1
+        d = transitive_closure(s,d)
+        return tree_from_inversions(s,d)
+    return None
+
+def tree_moves_left(tree,a):
+    n = tree.label()
+    d = tree_inversions_dict(tree)
+    s = getSFromTree(tree)
+    possibles = [b for b in xrange(1,n+1) if b != a and a in sub_tree_set(tree,b) and d.get((b,a),0) > 0]
+    if len(possibles) > 0:
+        b = min(possibles)
+        for aa in sub_tree_set(tree,a):
+            if d.get((a,aa)) != s[a-1]:
+                d[(b,aa)] -= 1
+        return tree_from_inversions(s,d)
+    return None
+
+def sweak_tree_remove_descent(tree,ba):
+    b,a = ba
+    for t in sweak_tree_prev(tree):
+        A = set(treeAscents(t))
+        if (a,b) in A and sweak_tree_add_ascent(t,(a,b)) == tree:
+            return t
+
 def sweak_tree_prev(tree):
     for i in xrange(len(tree)-1,0,-1):
         child0 = tree[i]
@@ -548,7 +591,7 @@ def sweak_tree_prev(tree):
                 S.set_immutable()
                 yield S
     for i,child in enumerate(tree):
-        for Schild in sweak_tree_prec(child):
+        for Schild in sweak_tree_prev(child):
             S = tree.clone()
             S[i] = Schild
             S.set_immutable()
@@ -985,11 +1028,15 @@ class SWeakFace():
         self._ascents = tuple(ascents)
         self._marked = {i for (i,j) in self._ascents}
         invs = tree_inversions_dict(t)
+        max_invs = dict(invs)
         s = getSFromTree(t)
         self._s = s
         for a,b in ascents:
             invs[(b,a)] = invs.get((b,a),0) + ZZ(1)/ZZ(2)
+            max_invs[(b,a)] = max_invs.get((b,a),0) + 1
         self._invs = transitive_closure(s, invs)
+        self._max_invs = transitive_closure(s, max_invs)
+        self._maxt = tree_from_inversions(s,self._max_invs)
 
     def s(self):
         return self._s
@@ -1002,6 +1049,13 @@ class SWeakFace():
 
     def inversions(self):
         return self._invs
+
+    def varies(self,b,a):
+        v = self._invs.get((b,a),0)
+        return int(v) < v
+
+    def inversion(self,b,a):
+        return self._invs.get((b,a),0)
 
     def dimension(self):
         return len(self._ascents)
@@ -1048,8 +1102,577 @@ class SWeakFace():
             return unmarked_left(t[0])
         return unmarked_left(self.tree()[0])
 
+    def get_min_tree(self):
+        return self._t
+
+    def get_max_tree(self):
+        return self._maxt
+
+    def tree_intervals(self):
+        t = self.get_min_tree()
+        maxt = self.get_max_tree()
+        L = [t]
+        seen = set()
+        while len(L) > 0:
+            tt = L.pop()
+            if not tt in seen:
+                seen.add(tt)
+                yield tt
+                for v in sweak_tree_succ(tt):
+                    if sweak_lequal(v,maxt):
+                        L.append(v)
+
+    def includes(self, other):
+        n = len(self._s)
+        for a in xrange(1,n+1):
+            for b in xrange(a+1,n+1):
+                i,j = other._invs.get((b,a),0), self._invs.get((b,a),0)
+                if int(j) == j and i != j:
+                    return False
+                if not (i >= j - ZZ(1)/ZZ(2) and i <= j + ZZ(1)/ZZ(2)):
+                    return False
+        return True
+
+    def sub_faces(self):
+        for t in self.tree_intervals():
+            A = list(treeAscents(t))
+            for subs in subsets(A):
+                F = SWeakFace(t,subs)
+                if self.includes(F):
+                    yield F
+
+    def sub_facets(self):
+        d = self.dimension() - 1
+        for t in self.tree_intervals():
+            A = list(treeAscents(t))
+            if len(A) >= d:
+                for subs in subsets(A):
+                    if len(subs) == d:
+                        F = SWeakFace(t,subs)
+                        if self.includes(F):
+                            yield F
+
+    def sub_face_to_set_partition(self, f):
+        def subset_compare(s1,s2):
+            if s1 == s2:
+                return 0
+            if any(f._invs.get((b,a),0) > self._invs.get((b,a),0) for a in s1 for b in s2 if b > a):
+                return 1
+            return -1
+        n = len(self._s)
+        d = {i:{i} for i in xrange(1,n+1)}
+        for i,j in f.ascents():
+            d[i].update(d[j])
+            for k in d[i]:
+                d[k] = d[i]
+        V = [d[i] for i in d if i == max(d[i])]
+        L = []
+        for v in V:
+            L.append(v)
+            k = len(L) - 1
+            j = k - 1
+            while j>=0 and subset_compare(L[j],v) == 1:
+                L[j+1] = L[j]
+                j-=1
+            L[j+1] = v
+        return OrderedSetPartition(L)
+
+    def intersection(self, f):
+        s = self._s
+        t1 = self.get_min_tree()
+        t2 = f.get_min_tree()
+        t1_max = self.get_max_tree()
+        inv1_max = tree_inversions_dict(t1_max)
+        t2_max = f.get_max_tree()
+        inv2_max = tree_inversions_dict(t2_max)
+        tjoin = join_trees(s,t1,t2)
+        if sweak_lequal(tjoin, t1_max) and sweak_lequal(tjoin, t2_max):
+            B = []
+            for (a,b) in treeAscents(tjoin):
+                inv = tree_inversions_dict(tjoin)
+                inv[(b,a)] = inv.get((b,a),0) + 1
+                inv = transitive_closure(s,inv)
+                if sweak_lequal_inversions(inv, inv1_max) and sweak_lequal_inversions(inv, inv2_max):
+                    B.append((a,b))
+            return SWeakFace(tjoin, B)
+        else:
+            return None
+
+
+    def get_tree_set_partition(self, t, i):
+
+        n = self.dimension() + 1
+        T = self._t
+        s = self._s
+        dT = tree_inversions_dict(T)
+        dt = tree_inversions_dict(t)
+        dTmax = tree_inversions_dict(self.get_max_tree())
+        possible_moves = {j for j in xrange(i+1,n+1) if dTmax.get((j,i),0) != dT.get((j,i),0)}
+        moves = {j for j in possible_moves if dt.get((j,i),0) != dT.get((j,i),0)}
+        parents = [j for j in possible_moves if i in sub_tree_set(t,j)]
+        parent = min(parents)
+
+        if not parent in moves:
+            A = sub_tree_set(t,i).intersection(sub_tree_set(T,i))
+            if dt.get((parent,i),0) == 0:
+                t0 = tree_moves_left(t,i)
+                if t0 != None and self.includes(SWeakFace(t0,[])):
+                    moved_parents = [p for p in parents if any(dt.get((j,p),0) != dT.get((j,p),0) for j in xrange(p+1,n+1))]
+                    moved_parent = min(moved_parents)
+                    unmoved_parents = [p for p in parents if all(dt.get((j,p),0) == dT.get((j,p),0) for j in xrange(p+1,n+1))]
+                    unmoved_parent = min(unmoved_parents)
+                    A.update(j for j in sub_tree_set(t,unmoved_parent).intersection(sub_tree_set(T,unmoved_parent)) if j not in sub_tree_set(t,moved_parent).intersection(sub_tree_set(T,moved_parent)))
+            B = {j for j in xrange(1,n+1) if not j in A}
+        else:
+            B = sub_tree_set(t,i).intersection(sub_tree_set(T,i))
+            if dt.get((parent,i),0) == s[parent-1]:
+                t0 = tree_moves_right(t,i)
+                if t0 != None and self.includes(SWeakFace(t0,[])):
+                    unmoved_parents = [p for p in parents if all(dt.get((j,p),0) == dT.get((j,p),0) for j in xrange(p+1,n+1))]
+                    unmoved_parent = min(unmoved_parents)
+                    B.update(j for j in xrange(1,n+1) if j not in sub_tree_set(t,unmoved_parent).intersection(sub_tree_set(T,unmoved_parent)))
+            A = {j for j in xrange(1,n+1) if not j in B}
+        return OrderedSetPartition([A,B])
+        # ~ dTmax = tree_inversions_dict(self.get_max_tree())
+        # ~ possible_moves = {j for j in xrange(i+1,n+1) if dTmax.get((j,i),0) != dT.get((j,i),0)}
+        # ~ moves = {j for j in possible_moves if dt.get((j,i),0) != dT.get((j,i),0)}
+        # ~ print(moves)
+        # ~ print(possible_moves)
+
+        # ~ if len(moves) == 0 or len(moves) == len(possible_moves):
+            # ~ A = {ii for ii in xrange(1,i+1) if all(dt.get((j,ii),0) == dt.get((j,i),0) and dT.get((j,ii),0) == dT.get((j,i),0) for j in xrange(i+1, n+1))}
+            # ~ B = {j for j in xrange(1,n+1) if not j in A}
+            # ~ if len(moves) == 0:
+                # ~ return OrderedSetPartition([A,B])
+            # ~ else:
+                # ~ return OrderedSetPartition([B,A])
+
+
+
+
+    def f_vector(self):
+        v = [0] * (self.dimension()+2)
+        v[0] = 1
+        for f in self.sub_faces():
+            d = f.dimension()+1
+            v[d]+=1
+        return tuple(v)
+
+    def generalized_permutohedron(self):
+        ieqs = []
+        n = len(self._s)
+        for f in self.sub_facets():
+            sp = self.sub_face_to_set_partition(f)
+            A = sp[0]
+            ieq = [0]*(n+1)
+            ieq[0] = -len(A)*(len(A) +1)/2
+            for i in A:
+                ieq[i] = 1
+            ieqs.append(ieq)
+        eq = [1]*(n+1)
+        eq[0] = -n*(n+1)/2
+        return Polyhedron(ieqs = ieqs, eqns = [eq])
+
+    def get_vertex(self,t):
+        n = len(self._s)
+        eqns = []
+        for i in range(1,n):
+            sp = self.get_tree_set_partition(t,i)
+            A = sp[0]
+            ieq = [0]*(n+1)
+            ieq[0] = -len(A)*(len(A) +1)/2
+            for i in A:
+                ieq[i] = 1
+            eqns.append(ieq)
+        eq = [1]*(n+1)
+        eq[0] = -n*(n+1)/2
+        eqns.append(eq)
+        return Polyhedron(eqns = eqns)
+
+    def get_tree_facet_ordered_sets(self,t):
+        f = SWeakFace(t,[])
+        for ff in self.sub_facets():
+            if ff.includes(f):
+                yield self.sub_face_to_set_partition(ff)
+
+def get_max_cells(s):
+    n = len(s)
+    for t in getSDecreasingTrees(s):
+        A = list(treeAscents(t))
+        if len(A) == n-1:
+            yield SWeakFace(t,A)
+
+def get_faces(s):
+    for t in getSDecreasingTrees(s):
+        A = list(treeAscents(t))
+        for subs in subsets(A):
+            yield SWeakFace(t,subs)
+
+def test_gp_vertices(f):
+    T = list(f.tree_intervals())
+    P = f.generalized_permutohedron()
+    return len(T) == P.n_vertices()
+
+
+# tested
+# 111, 222, 333, 303
+# 1111, 2222, 3333, 3104
+# 22222
+# 0011
+# failed :
+# 00111
+# 00011
+# 00012
+# 00112
+# 00122 failed
+# 00133 failed
+# 001133 failed
+def test_all_gp_vertices(s):
+    for f in get_max_cells(s):
+        if not test_gp_vertices(f):
+            print(f)
+            return f
+    return True
+
+# tested
+# 111, 222, 333, 303
+# 1111, 2222, 3333, 3104
+# 22222, 01413
+# 012123
+def test_all_gp_f_vectors(s):
+    for f in get_max_cells(s):
+        if not f.f_vector() != f.generalized_permutohedron().f_vector():
+            return f
+    return True
+
+# tested
+# 111, 222, 333, 303
+# 1111, 2222, 3333, 3104
+# 22222, 01413
+def test_all_gp_simple(s):
+    for f in get_max_cells(s):
+        if not f.generalized_permutohedron().is_simple():
+            return f
+    return True
+
+def test_tree_set_partitions(F,t):
+    return set(F.get_tree_facet_ordered_sets(t)) == set(F.get_tree_set_partition(t,i) for i in xrange(1,F.dimension()+1))
+
+# tested on
+"""
+sage: s = (0,1,2,2,1,1,2,1,3,3)
+sage: d = {}
+sage: d[(10,9)] = 1
+sage: d[(10,8)] = 1
+sage: d[(10,4)] = 1
+sage: d[(10,1)] = 1
+sage: d[(10,5)] = 2
+sage: d[(9,4)] = 2
+sage: d[(9,1)] = 2
+sage: d[(7,3)] = 1
+sage: d[(7,2)] = 1
+sage: d[(4,1)] = 1
+sage: t = tree_from_inversions(s,d)
+sage: F = SWeakFace(t, [(1,4),(2,3),(3,7),(4,9),(5,10),(6,7),(7,10),(8,9),(9,10)])
+"""
+# f vector (1, 2178, 9801, 19008, 20790, 14082, 6099, 1680, 282, 26, 1)
+def test_all_tree_set_partitions(F):
+    i =0
+    facets = {f:F.sub_face_to_set_partition(f) for f in F.sub_facets()}
+    for t in F.tree_intervals():
+        try:
+            ft = SWeakFace(t,[])
+            S1 = set(facets[f] for f in facets if f.includes(ft))
+            S2 = set(F.get_tree_set_partition(t,i) for i in xrange(1,F.dimension()+1))
+            if S1 != S2:
+                return t
+            i+=1
+            print(i)
+        except:
+            print("error")
+            return t
+    return True
+
+def test_face_intersection(f1,f2):
+    f = f1.intersection(f2)
+    S1 = {t for t in f1.tree_intervals() if f2.includes(SWeakFace(t,[]))}
+    if f is None:
+        S2 = set()
+    else:
+        S2 = set(f.tree_intervals())
+    return S1 == S2
+
+# tested
+# 111 222
+# 1111 2222
+def test_all_face_intersections(s):
+    F = list(get_faces(s))
+    for f1 in F:
+        for f2 in F:
+            if not test_face_intersection(f1,f2):
+                return f1,f2
+    return True
+
+# tested
+# 1111, 2222,
+def test_all_max_face_intersections(s):
+    F = list(get_max_cells(s))
+    for f1 in F:
+        for f2 in F:
+            if not test_face_intersection(f1,f2):
+                return f1,f2
+    return True
+
+def tree_parent(t, i):
+    n = t.label()
+    d = tree_inversions_dict(t)
+    p1 = None
+    p2 = n
+    A = set(range(i,n))
+    while p2 != i:
+        A = {j for j in A if d.get((p2,j),0) == d.get((p2,i),0)}
+        p1 = p2
+        p2 = max(A)
+        A.remove(p2)
+    return p1
+
+def sub_tree_set(t,j):
+    n = t.label()
+    d = tree_inversions_dict(t)
+    return {i for i in xrange(1,j+1) if all(d.get((k,j),0) == d.get((k,i),0) for k in xrange(j+1,n+1))}
+
 def get_face_tree(s, tree, ascents):
     return SWeakFace(tree, ascents)
+
+
+## FALSE
+def meet_ascent_lemma(t1,t2):
+    def transitive_link(S,a,b):
+        if (a,b) in S:
+            return True
+        for x,y in S:
+            if x == a and y < b and transitive_link(S,y,b):
+                return True
+        return False
+    s = getSFromTree(t1)
+    n = t1.label()
+    dt1 = tree_inversions_dict(t1)
+    dt2 = tree_inversions_dict(t2)
+    A1 = set(treeAscents(t1))
+    A2 = set(treeAscents(t2))
+    t = meet_trees(s,t1,t2)
+    A = set(treeAscents(t))
+    for a in range(1,n):
+        for b in range(a+1,n+1):
+            if dt1.get((b,a),0) == dt2.get((b,a),0):
+                if transitive_link(A1,a,b) and transitive_link(A2, a,b):
+                    if not transitive_link(A,a,b):
+                        print((a,b))
+                        return False
+    return True
+
+## FALSE
+def intersection_ascent_lemma_false(f1,f2):
+    def transitive_link(S,a,b):
+        if (a,b) in S:
+            return True
+        for x,y in S:
+            if x == a and y < b and transitive_link(S,y,b):
+                return True
+        return False
+    fi = f1.intersection(f2)
+    if fi is None:
+        return True
+    t1 = f1.get_min_tree()
+    t2 = f2.get_min_tree()
+    ti = fi.get_min_tree()
+    dt1 = tree_inversions_dict(t1)
+    dt2 = tree_inversions_dict(t2)
+    A1 = set(f1.ascents())
+    A2 = set(f2.ascents())
+    Ai = set(fi.ascents())
+    s = f1.s()
+    n = len(s)
+    for a in range(1,n):
+        for b in range(a+1,n+1):
+            if dt1.get((b,a),0) == dt2.get((b,a),0):
+                if transitive_link(A1,a,b) and transitive_link(A2, a,b):
+                    if not transitive_link(Ai,a,b):
+                        print((a,b))
+                        return False
+                if transitive_link(Ai,a,b):
+                    if not transitive_link(A1,a,b) or not transitive_link(A2,a,b):
+                        print((a,b))
+                        return False
+    return True
+
+## FALSE
+def join_descendant_lemma(t1,t2):
+    n = t1.label()
+    s = getSFromTree(t1)
+    t = join_trees(s,t1,t2)
+    for b in range(2,n+1):
+        D1 = sub_tree_set(t1,b)
+        D2 = sub_tree_set(t2,b)
+        Dt = sub_tree_set(t,b)
+        if not all(a in Dt for a in D1.intersection(D2)):
+            print(b)
+            print([a for a in D1.intersection(D2) if not a in Dt])
+            return False
+    return True
+
+def test_all_join_descendant_lemma(s):
+    T = list(getSDecreasingTrees(s))
+    for t1 in T:
+        for t2 in T:
+            if not join_descendant_lemma(t1,t2):
+                return (t1,t2)
+    return True
+
+# True
+def join_weak_descendant_lemma(t1,t2):
+    n = t1.label()
+    s = getSFromTree(t1)
+    t = join_trees(s,t1,t2)
+    dt1 = tree_inversions_dict(t1)
+    dt2 = tree_inversions_dict(t2)
+    dt = tree_inversions_dict(t)
+    for b in range(2,n):
+        for a in range(b):
+            if all(dt1.get((d,b),0) == dt1.get((d,a),0) and dt2.get((d,b),0) == dt2.get((d,a),0) for d in range(b+1,n+1)):
+                if not all(dt.get((d,a),0) >= dt.get((d,b),0) for d in range(b+1,n+1)):
+                    return False
+    return True
+
+# tested
+# 111 222
+# 1111 2222
+def test_all_join_weak_descendant_lemma(s):
+    T = list(getSDecreasingTrees(s))
+    for t1 in T:
+        for t2 in T:
+            if not join_weak_descendant_lemma(t1,t2):
+                return (t1,t2)
+    return True
+
+# true
+def intersection_ascent_lemma(f1,f2):
+    fi = f1.intersection(f2)
+    if fi is None:
+        return True
+    s = f1.s()
+    n = len(s)
+    I = set()
+    for b in range(2,n+1):
+        for a in range(1,b):
+            if f1.varies(b,a) and f2.varies(b,a) and f1.inversion(b,a) == f2.inversion(b,a):
+                I.add((b,a))
+    Imin = {(b,a) for (b,a) in I if all(aa <= a for (bb,aa) in I if bb == b)}
+    return all((a,b) in fi.ascents() for (b,a) in Imin)
+
+# tested
+# 111 222
+# 1111 2222
+def test_intersection_ascent_lemma(s):
+    F = list(get_faces(s))
+    for f1 in F:
+        for f2 in F:
+            if not intersection_ascent_lemma(f1,f2):
+                return f1,f2
+    return True
+
+# true
+def intersection_stability_lemma(f1,f2):
+    fi = f1.intersection(f2)
+    if fi is None:
+        return True
+    s = f1.s()
+    n = len(s)
+    for b in range(2,n+1):
+        for a in range(1,b):
+            if f1.varies(b,a) and f2.varies(b,a) and f1.inversion(b,a) == f2.inversion(b,a):
+                if not int(fi.inversion(b,a)) == int(f1.inversion(b,a)):
+                    return False
+    return True
+
+# tested
+# 111 222 333
+# 1111 2222
+def test_intersection_stability_lemma(s):
+    F = list(get_faces(s))
+    for f1 in F:
+        for f2 in F:
+            if not intersection_stability_lemma(f1,f2):
+                return f1,f2
+    return True
+
+def variation_chain(f,b,a):
+    s = f.s()
+    if (a,b) in f.ascents():
+        return True
+    for aa in range(a+1,b):
+        v = int(f.inversion(aa,a))
+        if (a,aa) in f.ascents() and v == 0:
+            if variation_chain(f,b,aa):
+                return True
+    return False
+def should_vary(f,b,a):
+    s = f.s()
+    if variation_chain(f,b,a):
+        return True
+    for aa in range(a+1,b):
+        v = int(f.inversion(aa,a))
+        if v > 0 and v < s[aa-1]:
+            if variation_chain(f,b,aa):
+                return True
+    return False
+
+# true
+def ascent_variation_lemma(f):
+    n = len(f.s())
+    for a in range(1,n):
+        for b in range(a+1,n+1):
+            t1, t2 = f.varies(b,a), should_vary(f,b,a)
+            if t1 != t2:
+                #print(b,a)
+                #print(t1,t2)
+                return False
+    return True
+
+# tested
+# 011 022 033
+# 0111 02222 0333 0303 0033
+# 03033 01113
+def test_all_ascent_variation_lemma(s):
+    for f in get_faces(s):
+        if not ascent_variation_lemma(f):
+            return f
+    return True
+
+# true
+def double_ascent_lemma(f):
+    n = len(f.s())
+    for a in range(1,n):
+        b = None
+        for c in range(a+1,n):
+            if f.varies(c,a):
+                if b is None:
+                    b = c
+                else:
+                    if not f.varies(c,b):
+                        return False
+    return True
+
+# tested
+# 011 022 033
+# 0111 0222 0333 0303
+# 01323
+def test_all_double_ascent_lemma(s):
+    for f in get_faces(s):
+        if not ascent_variation_lemma(f):
+            return f
+    return True
+
 
 def interval_to_face_tree(tree1, tree2):
     s = getSFromTree(tree1)
