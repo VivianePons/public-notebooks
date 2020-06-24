@@ -1,4 +1,4 @@
-FROM sagemath/sagemath:8.2
+FROM sagemath/sagemath:9.1
 
 # Ignore APT warnings about not having a TTY
 ENV DEBIAN_FRONTEND noninteractive
