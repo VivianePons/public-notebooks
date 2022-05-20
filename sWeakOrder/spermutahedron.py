@@ -864,6 +864,24 @@ class SDecreasingTree(Element):
             P[b-1] -= k
         return P
 
+    def get_point_cavern(self):
+        def r(t,l,cavern):
+            if len(t) == 0:
+                return cavern
+            v = 0
+            for i in range(len(t)):
+                c = t[i]
+                if i != 0:
+                    v+= cavern
+                    cavern+=1
+                cavern = r(c,l,cavern)
+            l[t.label() - 1] = v
+            return cavern
+        l = [0 for i in range(self.size())]
+        r(self._tree,l,1)
+        return l
+
+
 
 
 class SDecreasingTrees(UniqueRepresentation, Parent):
@@ -1229,6 +1247,22 @@ class SDecreasingTrees_s(SDecreasingTrees):
         matrix = self.proj_matrix()
         return LatticePrinter(self.poset(), lambda t: (Matrix(t.fixed_3d_coordinates())*matrix)[0], object_printer = lambda t: latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]"))
 
+    def intervals(self):
+        r"""
+        EXAMPLES::
+
+            sage: SD = SDecreasingTrees((0,2))
+            sage: list(SD.intervals())
+            [(2[1[[]], [], []], 2[1[[]], [], []]),
+             (2[1[[]], [], []], 2[[], 1[[]], []]),
+             (2[1[[]], [], []], 2[[], [], 1[[]]]),
+             (2[[], 1[[]], []], 2[[], 1[[]], []]),
+             (2[[], 1[[]], []], 2[[], [], 1[[]]]),
+             (2[[], [], 1[[]]], 2[[], [], 1[[]]])]
+        """
+        L = list(self)
+        return ((x,y) for x in L for y in L if x.sweak_lequal(y))
+
     ## S-Tamari
 
     def s_tamari_trees(self):
@@ -1467,8 +1501,8 @@ class SDecreasingTrees_s(SDecreasingTrees):
             sage: SDecreasingTrees((0,2,2,2)).projected_both_plot()
             Launched html viewer for Graphics3d Object
         """
-        p1 = self.projected_sweak_plot(color="blue")
-        p2 = self.projected_s_tamari_plot(color = "red")
+        p1 = self.projected_sweak_plot(color="blue", get_point = get_point)
+        p2 = self.projected_s_tamari_plot(color = "red", get_point = get_point)
         return p1 + p2
 
 
@@ -1667,30 +1701,43 @@ class SPureIntervalFace(Element):
         """
         return self.inversion_min(b,a) < self.inversion_max(b,a)
 
-    def variation_path(self, b,a):
+    def variation_path(self, c,a):
         r"""
         EXAMPLES::
 
             sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,1):1})),[(2,3)]).variation_path(3,2)
             [3, 2]
+            sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,1):1})),[(2,3),(1,3)]).variation_path(3,1)
+            [3, 1]
         """
-        s = self.s()
-        chain = [b]
-        if (a,b) in self.ascents():
+        if not self.varies(c,a):
+            return None
+        chain = [c]
+        ev = set(self.essential_variations().items())
+        v = self.inversion_min(c,a)
+        for b in range(c-1,a,-1):
+            if ((c,b),v) in ev and self.inversion_min(b,a) < self.s()[b-1]:
+                chain.append(b)
+        if ((c,a),v) in ev:
             chain.append(a)
-            return chain
-        vba = self.inversion_min(b,a)
-        for bi in range(b-1,a,-1):
-            v = self.inversion_min(b,bi)
-            if v == vba and s[bi-1] > 0 and (bi,b) in self.ascents():
-                chain.append(bi)
-                vbia = self.inversion_min(bi,a)
-                if vbia < s[bi-1] and (vbia > 0 or (a,bi) in self.ascents()):
-                    chain.append(a)
-                    return chain
-                b = bi
-                vba = 0
-        return None
+        return chain
+        # s = self.s()
+        # chain = [b]
+        # if (a,b) in self.ascents():
+            # chain.append(a)
+            # return chain
+        # vba = self.inversion_min(b,a)
+        # for bi in range(b-1,a,-1):
+            # v = self.inversion_min(b,bi)
+            # if v == vba and s[bi-1] > 0 and (bi,b) in self.ascents():
+                # chain.append(bi)
+                # vbia = self.inversion_min(bi,a)
+                # if vbia < s[bi-1] and (vbia > 0 or (a,bi) in self.ascents()):
+                    # chain.append(a)
+                    # return chain
+                # b = bi
+                # vba = 0
+        # return None
 
     def is_variation_path(self,p):
         r"""
@@ -1749,6 +1796,9 @@ class SPureIntervalFace(Element):
             1
         """
         return len(self._ascents)
+
+    def is_full_dimensional(self):
+        return self.dimension() == self.size() - 1
 
     def __repr__(self):
         r"""
@@ -1944,6 +1994,34 @@ class SPureIntervalFace(Element):
              (3[2[[], 1[[]], []], [], []], ((2, 3),))]
         """
         yield from self.sub_faces(self.dimension() - 1)
+
+    def sub_facets_ordered_partitions(self):
+        nn = set(range(1,self.size()+1))
+
+        # Type 0
+        for a in range(1, self.size()):
+            d = set(self.tree_min().descendants(a))
+            d.add(a)
+            yield OrderedSetPartition([d, nn.difference(d)])
+
+        # Type 1
+        for a in range(1, self.size()):
+            for path in self.left_movable_paths(a):
+                Tclosure = set(path)
+                Tclosure.update(j for p in path for j in self.tree_min().middle_descendants(p))
+                yield OrderedSetPartition([nn.difference(Tclosure),Tclosure])
+
+        # Type 2
+        for a in range(1,self.size()):
+            for p1 in self.movable_descendants(a):
+                if self.inversion_min(a,p1) == self.s()[a-1] - 1:
+                    for path in self.left_movable_paths(p1):
+                        d = set(self.tree_min().descendants(a))
+                        d.add(a)
+                        Tclosure = set(path)
+                        Tclosure.update(j for p in path for j in self.tree_min().middle_descendants(p))
+                        J = d.difference(Tclosure)
+                        yield OrderedSetPartition([J, nn.difference(J)])
 
 
     def sub_face_to_set_partition(self, f):
@@ -2147,18 +2225,18 @@ class SPureIntervalFace(Element):
         EXAMPLES::
 
             sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,2):1, (3,1):1, (2,1):1})),[(1,2),(2,3)]).variations()
-            {(2, 1), (3, 1), (3, 2)}
+            {(2, 1): 1, (3, 1): 1, (3, 2): 1}
 
         """
         n = self.size()
-        return set((b,a) for a in range(1,n) for b in range(a+1,n+1) if self.varies(b,a))
+        return {(b,a):self.inversion_min(b,a) for a in range(1,n) for b in range(a+1,n+1) if self.varies(b,a)}
 
     def essential_variations(self):
         r"""
         EXAMPLES::
 
             sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,2):1, (3,1):1, (2,1):1})),[(1,2),(2,3)]).essential_variations()
-            {(2, 1), (3, 2)}
+            {(2, 1): 1, (3, 2): 1}
 
         """
         s = self.s()
@@ -2168,20 +2246,41 @@ class SPureIntervalFace(Element):
         var = self.variations()
 
         # get essential variations
-        maxvar = set()
+        maxvar = dict()
         for c in range(2,n+1):
             for a in range(c-1,0,-1):
                 if (c,a) in var:
-                    ca = t1.inversion(c,a)
+                    ca = var[(c,a)]
                     for b in range(a+1,c):
                         if (c,b) in maxvar:
                             ba = t1.inversion(b,a)
-                            cb = t1.inversion(c,b)
+                            cb = maxvar[(c,b)]
                             if ca == cb and ba > 0 and ba < s[b-1]:
                                 break
                     else:
-                        maxvar.add((c,a))
+                        maxvar[(c,a)] = ca
         return maxvar
+
+    def is_essential_variation(self, c, a):
+        r"""
+        EXAMPLES::
+
+            sage: f = SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,2):1, (3,1):1, (2,1):1})),[(1,2),(2,3)])
+            sage: f.is_essential_variation(2,1)
+            True
+            sage: f.is_essential_variation(3,2)
+            True
+            sage: f.is_essential_variation(3,1)
+            False
+        """
+
+        if not self.varies(c,a):
+            return False
+
+        for b in range(a+1,c):
+            if self.varies(c,b) and self.inversion_min(b,a) > 0 and self.inversion_min(b,a) < self.s()[b-1]:
+                return False
+        return True
 
     def right_variations(self):
         r"""
@@ -2258,6 +2357,38 @@ class SPureIntervalFace(Element):
             return Polyhedron(ieqs = v_ieqs, eqns = pol.equations())
         return None
 
+
+    def movable_descendants(self, c):
+        root = self.tree_min().node(c)
+        L = root[:-1]
+        while len(L) >0 :
+            node = L.pop()
+            if len(node) > 0:
+                yield node.label()
+                if len(node) > 1:
+                    L.append(node[-2])
+
+    def left_movable_descendants(self, c):
+        root = self.tree_min().node(c)
+        L = [root[0]]
+        while len(L) >0 :
+            node = L.pop()
+            if len(node) > 0:
+                yield node.label()
+                if len(node) > 1:
+                    L.append(node[-2])
+
+    def left_movable_paths(self, i = None):
+        if i is None:
+            for i in range(1,F.size()):
+                yield from self.left_movable_paths(i)
+            return
+        root = self.tree_min().node(i)
+        p1 =  (root.label(),)
+        yield p1
+        for j in self.left_movable_descendants(i):
+            for p in self.left_movable_paths(j):
+                yield p1 + p
 
 
 
@@ -3054,6 +3185,31 @@ class LatticePrinter():
 
 #### test functions ####
 
+## intervals ##
+
+"""
+sage: transitity((0,2))
+True
+sage: transitity((0,2,2))
+True
+sage: transitity((0,2,2,2))
+True
+sage: transitity((0,3,3))
+True
+sage: transitity((0,2,2,2,2))
+True
+"""
+def transitity(s):
+    SD = SDecreasingTrees(s)
+    n = SD.n()
+    for t1, t2 in SD.intervals():
+        for a in range(1,n):
+            for b in range(a+1,n):
+                for c in range(b+1,n+1):
+                    if t2.inversion(c,b) > t1.inversion(c,b) and t2.inversion(b,a) > t1.inversion(b,a) and t2.inversion(c,a) == t1.inversion(c,a):
+                        return t1,t2
+    return True
+
 
 
 ### Ascentopes ###
@@ -3158,5 +3314,448 @@ def check_vtamari_pols(s):
     pols = SDecreasingTrees(s).s_tamari_facet_polyhedrons()
     return check_vtam_intersect(pols) and check_vtam_vertices(s,pols) and check_vtam_graph(s,pols)
 
+# False 2,2,2
+def check_essential_variations_intersection(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = set(f3.essential_variations().items())
+                ev12 = set(f2.essential_variations().items()).intersection(set(f1.essential_variations().items()))
+                if ev12 != ev3:
+                    return f1, f2
+    return True
 
+# no 2,2,2
+def check_essential_variations_intersection_rule(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = set(f3.essential_variations().items())
+                var12 = set(f2.variations().items()).intersection(set(f1.variations().items()))
+                union12 = set(f2.essential_variations().items()).union(set(f1.essential_variations().items()))
+                ev12 = var12.intersection(union12)
+                if ev12 != ev3:
+                    return f1, f2
+    return True
+
+# checked
+# 222
+# 2222
+# 331
+# 0202
+def check_essential_variations_weak_intersection_rule(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = set(f3.essential_variations().items())
+                var12 = set(f2.variations().items()).intersection(set(f1.variations().items()))
+                union12 = set(f2.essential_variations().items()).union(set(f1.essential_variations().items()))
+                ev12 = var12.intersection(union12)
+                if not all(v in ev12 for v in ev3):
+                    return f1, f2
+    return True
+
+# checked
+# 222
+# 2222
+def check_essential_variations_last_rule(s):
+    def potential(f,ev,c,a):
+        if (c,a) in ev:
+            return True
+        p = f.variation_path(c,a)
+        b = p[-1]
+        return f.inversion_min(b,a) == f.s()[b-1] - 1 and f.varies(b,a)
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                ev1 = f1.essential_variations()
+                ev2 = f2.essential_variations()
+                for c,a in ev3:
+                    if not potential(f1,ev1,c,a) or not potential(f2,ev2,c,a):
+                        return f1,f2,c,a
+    return True
+
+# no
+def check_essential_variations_last_rule_iif(s):
+    def compatible_potential(f1, f2,ev1, ev2,c,a):
+        if (c,a) not in ev1:
+            if (c,a) not in ev2:
+                return False
+        else:
+            if (c,a) in ev2:
+                return True
+            f1,f2 = f2,f1
+            ev1, ev2 = ev2, ev1
+        p = f1.variation_path(c,a)
+        b = p[-1]
+        return f1.inversion_min(b,a) == f1.s()[b-1] - 1 and f1.varies(b,a) and f2.inversion_min(b,a) == f2.s()[b-1]
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = set(f3.essential_variations().items())
+                ev1 = f1.essential_variations()
+                ev2 = f2.essential_variations()
+                var12 = set(f2.variations().items()).intersection(set(f1.variations().items()))
+                ev12 = {((c,a),v) for (c,a),v in var12 if compatible_potential(f1,f2,ev1,ev2,c,a)}
+                if not ev12 == ev3:
+                    return f1,f2
+    return True
+
+# checked 222
+# 2222
+def check_essential_variations_compatible(s):
+    def compatible(f1,f2,c,a):
+        if not f2.varies(c,a) or f2.inversion_min(c,a) != f1.inversion_min(c,a):
+            return False
+        if f2.is_essential_variation(c,a):
+            return True
+
+        for b in range(a+1,c):
+            if f2.inversion_min(b,a) > 0 and f2.inversion_min(b,a) < s[b-1]:
+                if not (f2.inversion_min(b,a) == s[b-1] -1 and f1.inversion_min(b,a) == s[b-1] and f2.varies(b,a)):
+                    return False
+        return True
+
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                ev1 = f1.essential_variations()
+                ev2 = f2.essential_variations()
+                ev12 = {(c,a):ev1[(c,a)] for c,a in ev1 if compatible(f1,f2,c,a)}
+                ev12.update({(c,a):ev2[(c,a)] for c,a in ev2 if compatible(f2,f1,c,a)})
+                if not ev12 == ev3:
+                    return f1,f2
+    return True
+
+# 222
+# 2222
+def check_essential_variations_compatible2(s):
+    def compatible(f1,f2,c,a):
+        if not f2.varies(c,a) or f2.inversion_min(c,a) != f1.inversion_min(c,a):
+            return False
+        if f2.is_essential_variation(c,a):
+            return True
+
+        for b in range(a+1,c):
+            if f2.inversion_min(b,a) > 0 and f2.inversion_min(b,a) < s[b-1]:
+                if not f1.inversion_min(b,a) == s[b-1]:
+                    return False
+        return True
+
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                ev1 = f1.essential_variations()
+                ev2 = f2.essential_variations()
+                ev12 = {(c,a):ev1[(c,a)] for c,a in ev1 if compatible(f1,f2,c,a)}
+                ev12.update({(c,a):ev2[(c,a)] for c,a in ev2 if compatible(f2,f1,c,a)})
+                if not ev12 == ev3:
+                    return f1,f2
+    return True
+
+# 222
+# 2222
+def check_essential_variations_compatible_intersection(s):
+    def compatible(f1,f2,c,a):
+        if not f2.varies(c,a) or f2.inversion_min(c,a) != f1.inversion_min(c,a):
+            return False
+        for b in range(a+1,c):
+            if f2.inversion_min(b,a) > 0 and f2.inversion_min(b,a) < s[b-1]:
+                if not f1.inversion_min(b,a) == s[b-1]:
+                    return False
+        return True
+
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                v1 = f1.variations()
+                v2 = f2.variations()
+                c1 = {(c,a):v1[(c,a)] for c,a in v1 if compatible(f1,f2,c,a)}
+                c2 = {(c,a):v2[(c,a)] for c,a in v2 if compatible(f2,f1,c,a)}
+                ev12 = {(c,a):c1[(c,a)] for c,a in c1 if (c,a) in c2 and c2[(c,a)] == c1[(c,a)]}
+                if not ev12 == ev3:
+                    return f1,f2
+    return True
+
+# checked
+# 222
+# 2222
+# 331
+# 3330
+# 0333
+# 0202
+def check_variations_intersection(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = set(f3.variations().items())
+                ev12 = set(f2.variations().items()).intersection(set(f1.variations().items()))
+                if ev12 != ev3:
+                    return f1, f2
+    return True
+
+# no 222
+def check_variations_none_intersection(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 is None:
+                ev12 = set(f2.variations().items()).intersection(set(f1.variations().items()))
+                if len(ev12)!=0:
+                    return f1, f2
+    return True
+
+# no 222
+def check_variation_path_intersection(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                for (c,a) in f3.variations():
+                    path = f3.variation_path(c,a)
+                    p1 = f1.variation_path(c,a)
+                    p2 = set(f2.variation_path(c,a))
+                    p12 = [ci for ci in p1 if ci in p2]
+                    if path != p12:
+                        return f1,f2,c,a
+    return True
+
+# no 2222
+def test_ca_cb_essential_var(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for f2 in F:
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                for (c,a) in f3.essential_variations():
+                    v = f3.inversion_min(c,a)
+                    for b in range(a+1,c):
+                        if f3.is_essential_variation(c,b) and f3.inversion_min(c,b) == v  and (not f1.is_essential_variation(c,b) or not f2.is_essential_variation(c,b)):
+                            return f1,f2,c,b,a
+    return True
+# 222
+# 2222
+# 22222
+# 11111
+# 02022
+# 02202
+# 222222
+def test_a_barrier(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for c,b in f1.variations():
+            if s[b-1] > 0:
+                for a in range(1,b):
+                    if f1.inversion_min(b,a) == s[b-1] and f1.inversion_min(c,a) == f1.inversion_min(c,b):
+                        for bb in range(b+1,c):
+                            if f1.inversion_min(bb,a) > 0 and f1.inversion_min(bb,a) < s[bb-1]:
+                                break
+                        else:
+                            return f1,c,b
+    return True
+
+# NO 22222
+def test_a_barrier_strong(s):
+    F = list(SPureIntervalFaces(s))
+    for f1 in F:
+        for c,b in f1.variations():
+            if s[b-1] > 0:
+                for a in range(1,b):
+                    if f1.inversion_min(b,a) == s[b-1] and f1.inversion_min(c,a) == f1.inversion_min(c,b):
+                        for bb in range(b+1,c):
+                            if f1.inversion_min(c,bb) == f1.inversion_min(c,b) and f1.inversion_min(bb,a) == s[bb-1] and f1.inversion_min(bb,b) == 0:
+                                return f1,c,b
+    return True
+
+
+# 222
+# 2222
+def test_ca_cb_intersection_ev(s):
+    F = list(SPureIntervalFaces(s))
+    n = len(s)
+    for f1 in F:
+        for f2 in F:
+            ev1 = f1.essential_variations()
+            ev2 = f2.essential_variations()
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                for c in range(1,n+1):
+                    for b in range(1,c):
+                        if (c,b) in ev3:
+                            for a in range(1,b):
+                                if (c,a) in ev3 and ev3[(c,a)] == ev3[(c,b)]:
+                                    v = ev3[(c,b)]
+                                    if not ((ev1.get((c,a),None) == v and ev1.get((c,b),None) == v) or (ev2.get((c,a),None) == v and ev2.get((c,b),None) == v)):
+                                        return f1,f2,c,b,a
+    return True
+
+# no 2222
+def test_ca_cb_intersection_ev_strong(s):
+    F = list(SPureIntervalFaces(s))
+    n = len(s)
+    for f1 in F:
+        for f2 in F:
+            ev1 = f1.essential_variations()
+            ev2 = f2.essential_variations()
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                for c in range(1,n+1):
+                    for b in range(1,c):
+                        if (c,b) in ev3:
+                            for a in range(1,b):
+                                if (c,a) in ev3 and ev3[(c,a)] == ev3[(c,b)]:
+                                    v = ev3[(c,b)]
+                                    if not ((ev1.get((c,a),None) == v and ev1.get((c,b),None) == v) and (ev2.get((c,a),None) == v and ev2.get((c,b),None) == v)):
+                                        return f1,f2,c,b,a
+    return True
+# 222
+# 2222
+def test_ca_cb_intersection_ev_ca_impl_cb(s):
+    F = list(SPureIntervalFaces(s))
+    n = len(s)
+    for f1 in F:
+        for f2 in F:
+            ev1 = f1.essential_variations()
+            ev2 = f2.essential_variations()
+            f3 = f1.intersection(f2)
+            if f3 != None:
+                ev3 = f3.essential_variations()
+                for c in range(1,n+1):
+                    for b in range(1,c):
+                        if (c,b) in ev3:
+                            for a in range(1,b):
+                                if (c,a) in ev3 and ev3[(c,a)] == ev3[(c,b)]:
+                                    v = ev3[(c,b)]
+                                    if ev1.get((c,a),None) == v and not ev1.get((c,b),None) == v:
+                                        return f1,f2,c,b,a
+    return True
+
+# No
+# def test_ca_ba_variations(s):
+    # F = list(SPureIntervalFaces(s))
+    # for f in F:
+        # vf = f.variations()
+        # for c,a in vf:
+            # for b in range(a+1,c):
+                # if f.inversion_min(c,b) == f.inversion_min(c,a) and f.inversion_min(b,a) == 0:
+                    # if not (b,a) in vf:
+                        # return f,c,b,a
+    # return True
+
+# 222
+# 2222
+# 22222
+# 02022
+# 02202
+def test_ca_ba_variations(s):
+    F = list(SPureIntervalFaces(s))
+    for f in F:
+        vf = f.variations()
+        for c,a in vf:
+            for b in range(a+1,c):
+                if s[b-1] > 0:
+                    if f.inversion_min(c,b) == f.inversion_min(c,a) and f.inversion_min(b,a) == 0:
+                        if not (b,a) in vf:
+                            for bb in range(b+1,c):
+                                if f.inversion_min(bb,b) > 0 and f.inversion_min(bb,b) < s[bb-1] and (c,bb) in vf:
+                                    break
+                            else:
+                                return f,c,b,a
+    return True
+
+
+# tested
+# 022
+# 0222
+# 02222
+# 022222
+# 0232
+# 02332
+# 0111
+# 0112
+# 0212
+# 022332
+def test_full_dimensional_facets(s):
+    for F in SPureIntervalFaces(s).facets():
+        L1 = set(F.sub_facets_ordered_partitions())
+        L2 = set(F.sub_face_to_set_partition(f) for f in F.sub_facets())
+        if L1 != L2:
+            return F
+    return True
+
+# tested
+# 022
+# 0222
+# 02222
+# 022222
+# 0232
+# 02332
+# 0111
+# 0112
+# 0212
+# 022332
+def test_full_dimensional_facets_unique(s):
+    for F in SPureIntervalFaces(s).facets():
+        L = list(F.sub_facets_ordered_partitions())
+        if len(L) != len(set(L)):
+            return F
+    return True
+
+
+### TEST CAVERN REALIZATION
+
+# tested
+# 122
+# 1222
+# 1333
+# 1332
+# 1232
+# 12222
+# 122222
+def test_convex_hull_number(s):
+    SPF = SPureIntervalFaces(s)
+
+    for f in SPF.facets():
+        pol = f.s_weak_polyhedron(get_point=lambda x:x.get_point_cavern())
+        tr = list(f.interval_trees())
+        if len(tr) != len(pol.vertices()):
+            return f
+
+    return True
+
+def test_faces_dimensions(s):
+    SPF = SPureIntervalFaces(s)
+
+    for f in SPF:
+        pol = f.s_weak_polyhedron(get_point=lambda x:x.get_point_cavern())
+        if pol.dimension() != f.dimension():
+            return f
+
+    return True
 
