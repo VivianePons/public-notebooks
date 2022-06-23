@@ -1,0 +1,3 @@
+[submodule "zeta_areaseq"]
+	path = zeta_areaseq
+	url = git@github.com:VivianePons/zeta_areaseq.git

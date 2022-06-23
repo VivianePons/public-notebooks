@@ -727,6 +727,15 @@ class SDecreasingTree(Element):
                 if dimension is None or len(subs) == dimension:
                     yield SPureIntervalFace(self, subs)
 
+    def increase_arity(self, value):
+        s = list(self.s())
+        s[value-1] +=1
+        return SDecreasingTree((s,self._invs))
+
+    def select_double(self, c, a):
+        return self.inversion(c,a) == self.s()[c-1] - 1 and all(self.inversion(b,a) == self.s()[b-1] for b in range(a+1,c) if self.inversion(c,b) == self.inversion(c,a))
+
+
     ## S Tamari
 
     def is_s_tamari(self):
@@ -1240,12 +1249,33 @@ class SDecreasingTrees_s(SDecreasingTrees):
         """
         return LatticePoset(self.poset())
 
-    def lattice_printer(self):
+    def lattice_printer(self,**args):
         r"""
 
         """
+        if "poset" in args:
+            poset = args["poset"]
+            del args["poset"]
+        else:
+            poset = self.poset()
+
         matrix = self.proj_matrix()
-        return LatticePrinter(self.poset(), lambda t: (Matrix(t.fixed_3d_coordinates())*matrix)[0], object_printer = lambda t: latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]"))
+        return LatticePrinter(poset, lambda t: (Matrix(t.fixed_3d_coordinates())*matrix)[0], object_printer = lambda t: latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]"), **args)
+
+    def lattice_doublings(self):
+        s = self.s()
+        initial = [0] * len(s)
+        E = {SDecreasingTree((initial, {}))}
+        yield Poset([E, lambda x,y: x.sweak_lequal(y)])
+        for i in range(len(s)):
+            c =  i+1
+            for v in range(s[i]):
+                E = {dt.increase_arity(c) for dt in E}
+                for a in range(c-1,0,-1):
+                    select = {dt for dt in E if dt.select_double(c,a)}
+                    E.update(dt.rotate_ascent((a,c)) for dt in select)
+                    yield Poset([list(E), lambda x,y: x.sweak_lequal(y)])
+
 
     def intervals(self):
         r"""
