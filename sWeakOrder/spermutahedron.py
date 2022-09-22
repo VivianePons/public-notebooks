@@ -727,6 +727,38 @@ class SDecreasingTree(Element):
                 if dimension is None or len(subs) == dimension:
                     yield SPureIntervalFace(self, subs)
 
+    def variations(self, other):
+        if not self.sweak_lequal(other):
+            return None
+        return {(c,a):self.inversion(c,a) for c,a in other.inversions() if other.inversion(c,a) > self.inversion(c,a)}
+
+    def essential_variations(self, other):
+        s = self.s()
+        n = self.size()
+        var = self.variations(other)
+        evar = {}
+        for c,a in var:
+            for b in range(a+1,c):
+                if (c,b) in var and self.inversion(b,a) > 0 and self.inversion(b,a) < s[b-1]:
+                    break
+            else:
+                evar[(c,a)] = self.inversion(c,a)
+
+        return evar
+
+    def is_pure(self, other):
+        evar = self.essential_variations(other)
+
+        for c,a in evar:
+            for b in range(a+1,c):
+                if (b,a) in evar and (not (c,b) in evar or evar[(c,b)] != evar[(c,a)]):
+                    return False
+                if evar.get((c,b),0) == evar[(c,a)] and self.s()[b-1] > 0 and (not (b,a) in evar or evar[(b,a)] != 0):
+                    return False
+
+        return True
+
+
     def increase_arity(self, value):
         s = list(self.s())
         s[value-1] +=1
@@ -735,6 +767,14 @@ class SDecreasingTree(Element):
     def select_double(self, c, a):
         return self.inversion(c,a) == self.s()[c-1] - 1 and all(self.inversion(b,a) == self.s()[b-1] for b in range(a+1,c) if self.inversion(c,b) == self.inversion(c,a))
 
+    def subtree(self, nodes):
+        """
+        Return the standardized subtree of `self` by keeping only the given nodes
+        """
+        nodes = sorted(nodes)
+        d = {v:i+1 for i,v in enumerate(nodes)}
+        new_s = tuple(self.s()[i] for i in range(len(self.s())) if i+1 in d)
+        return SDecreasingTree((new_s, {(d[b],d[a]): self.inversion(b,a) for b,a in self.inversions() if b in d and a in d}))
 
     ## S Tamari
 
@@ -1954,6 +1994,23 @@ class SPureIntervalFace(Element):
                     if v.sweak_lequal(maxt):
                         L.append(v)
 
+    def interval_as_poset(self):
+        return Poset((list(self.interval_trees()), lambda x,y : x.sweak_lequal(y)))
+
+    def lattice_printer(self,**args):
+        r"""
+
+        """
+        poset = self.interval_as_poset()
+
+        nodes = set(v for a in self.ascents() for v in a)
+
+        st = f.tree_min().subtree(nodes)
+
+        matrix = SDecreasingTrees(st.s()).proj_matrix()
+        return LatticePrinter(poset, lambda t: (Matrix(t.subtree(nodes).fixed_3d_coordinates())*matrix)[0], object_printer = lambda t: latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]"), **args)
+
+
     def include_face(self, other):
         r"""
         EXAMPLES::
@@ -2255,41 +2312,41 @@ class SPureIntervalFace(Element):
         EXAMPLES::
 
             sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,2):1, (3,1):1, (2,1):1})),[(1,2),(2,3)]).variations()
-            {(2, 1): 1, (3, 1): 1, (3, 2): 1}
+            {(3, 2): 1, (3, 1): 1, (2, 1): 1}
 
         """
-        n = self.size()
-        return {(b,a):self.inversion_min(b,a) for a in range(1,n) for b in range(a+1,n+1) if self.varies(b,a)}
+        return self.tree_min().variations(self.tree_max())
 
     def essential_variations(self):
         r"""
         EXAMPLES::
 
             sage: SPureIntervalFace(SDecreasingTree(((0,2,2),{(3,2):1, (3,1):1, (2,1):1})),[(1,2),(2,3)]).essential_variations()
-            {(2, 1): 1, (3, 2): 1}
+            {(3, 2): 1, (2, 1): 1}
 
         """
-        s = self.s()
-        n = self.size()
-        t1 = self.tree_min()
-        t2 = self.tree_max()
-        var = self.variations()
+        return self.tree_min().essential_variations(self.tree_max())
+        # s = self.s()
+        # n = self.size()
+        # t1 = self.tree_min()
+        # t2 = self.tree_max()
+        # var = self.variations()
 
-        # get essential variations
-        maxvar = dict()
-        for c in range(2,n+1):
-            for a in range(c-1,0,-1):
-                if (c,a) in var:
-                    ca = var[(c,a)]
-                    for b in range(a+1,c):
-                        if (c,b) in maxvar:
-                            ba = t1.inversion(b,a)
-                            cb = maxvar[(c,b)]
-                            if ca == cb and ba > 0 and ba < s[b-1]:
-                                break
-                    else:
-                        maxvar[(c,a)] = ca
-        return maxvar
+        # # get essential variations
+        # maxvar = dict()
+        # for c in range(2,n+1):
+            # for a in range(c-1,0,-1):
+                # if (c,a) in var:
+                    # ca = var[(c,a)]
+                    # for b in range(a+1,c):
+                        # if (c,b) in maxvar:
+                            # ba = t1.inversion(b,a)
+                            # cb = maxvar[(c,b)]
+                            # if ca == cb and ba > 0 and ba < s[b-1]:
+                                # break
+                    # else:
+                        # maxvar[(c,a)] = ca
+        # return maxvar
 
     def is_essential_variation(self, c, a):
         r"""
