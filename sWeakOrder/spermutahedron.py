@@ -15,7 +15,8 @@ from sage.misc.lazy_attribute import lazy_attribute
 from sage.misc.misc import subsets
 from sage.misc.misc_c import prod
 from sage.plot.line import line
-from sage.rings.all import NN, ZZ
+from sage.rings.all import NN, ZZ, QQ
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
 from sage.sets.disjoint_union_enumerated_sets import DisjointUnionEnumeratedSets
 from sage.structure.element import Element
 from sage.structure.parent import Parent
@@ -342,6 +343,16 @@ class SDecreasingTree(Element):
             for a in range(1,b):
                 if self.version(b,a) > 0:
                     yield (b,a)
+
+    def to_s_permutation(self):
+        def r(node):
+            l = node.label()
+            if len(node) > 0:
+                yield from r(node[0])
+                for i in range(1,len(node)):
+                    yield l
+                    yield from r(node[i])
+        return list(r(self._tree))
 
     def tree_ascents(self):
         """
@@ -746,17 +757,38 @@ class SDecreasingTree(Element):
 
         return evar
 
+    def is_plusone(self,other):
+        return all(other.inversion(c,a) == self.inversion(c,a) + 1 for c,a in self.variations(other))
+
     def is_pure(self, other):
+        if not self.is_plusone(other):
+            return False
         evar = self.essential_variations(other)
+        var = self.variations(other)
+
+        for c,a in var:
+            for b in range(a+1,c):
+                if (b,a) in var and (not (c,b) in var or var[(c,b)] != var[(c,a)]):
+                    return False
 
         for c,a in evar:
             for b in range(a+1,c):
-                if (b,a) in evar and (not (c,b) in evar or evar[(c,b)] != evar[(c,a)]):
-                    return False
-                if evar.get((c,b),0) == evar[(c,a)] and self.s()[b-1] > 0 and (not (b,a) in evar or evar[(b,a)] != 0):
+                if (c,b) in evar and evar[(c,b)] == evar[(c,a)] and self.s()[b-1] > 0 and (not (b,a) in var or var[(b,a)] != 0):
                     return False
 
         return True
+
+    # def is_pure2(self, other):
+        # evar = self.variations(other)
+
+        # for c,a in evar:
+            # for b in range(a+1,c):
+                # if (b,a) in evar and (not (c,b) in evar or evar[(c,b)] != evar[(c,a)]):
+                    # return False
+                # if (c,b) in evar and evar[(c,b)] == evar[(c,a)] and self.s()[b-1] > 0 and (not (b,a) in evar or evar[(b,a)] != 0):
+                    # return False
+
+        # return True
 
 
     def increase_arity(self, value):
@@ -1025,6 +1057,22 @@ class SDecreasingTrees(UniqueRepresentation, Parent):
                                 new_inversions[(c,a)] = new_inversions[(c,b)]
                                 changed = True
         return new_inversions
+
+    @staticmethod
+    def from_s_permutation(perm):
+        def r(perm):
+            if len(perm) ==0:
+                return LabelledOrderedTree([], label="")
+            m = max(perm)
+            pos = [i for i in range(len(perm)) if perm[i] == m]
+            L = []
+            deb = 0
+            for i in pos:
+                L.append(r(perm[deb:i]))
+                deb = i+1
+            L.append(r(perm[deb:]))
+            return LabelledOrderedTree(L, label = m)
+        return SDecreasingTree(r(perm))
 
     @staticmethod
     def some_s():
@@ -2005,7 +2053,7 @@ class SPureIntervalFace(Element):
 
         nodes = set(v for a in self.ascents() for v in a)
 
-        st = f.tree_min().subtree(nodes)
+        st = self.tree_min().subtree(nodes)
 
         matrix = SDecreasingTrees(st.s()).proj_matrix()
         return LatticePrinter(poset, lambda t: (Matrix(t.subtree(nodes).fixed_3d_coordinates())*matrix)[0], object_printer = lambda t: latex(t).replace("[auto]","[every node/.style={inner sep = 3pt}]"), **args)
