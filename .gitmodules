@@ -1,3 +1,6 @@
 [submodule "zeta_areaseq"]
 	path = zeta_areaseq
 	url = git@github.com:VivianePons/zeta_areaseq.git
+[submodule "SWeakOrder"]
+	path = SWeakOrder
+	url = https://github.com/VivianePons/SWeakOrder
