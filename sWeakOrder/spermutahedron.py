@@ -760,6 +760,15 @@ class SDecreasingTree(Element):
     def is_plusone(self,other):
         return all(other.inversion(c,a) == self.inversion(c,a) + 1 for c,a in self.variations(other))
 
+    def is_essential_variation_semi_transitive(self, other):
+        evar = self.essential_variations(other)
+
+        for c,b in evar:
+            for a in range(1,b):
+                if (b,a) in evar and evar[(b,a)] == 0 and not (c,a) in evar:
+                    return False
+        return True
+
     def is_pure(self, other):
         if not self.is_plusone(other):
             return False
