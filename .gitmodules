@@ -4,3 +4,6 @@
 [submodule "SWeakOrder"]
 	path = SWeakOrder
 	url = https://github.com/VivianePons/SWeakOrder
+[submodule "HDR-notebooks"]
+	path = HDR-notebooks
+	url = git@github.com:VivianePons/HDR-notebooks.git
