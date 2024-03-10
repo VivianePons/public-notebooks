@@ -7,3 +7,6 @@
 [submodule "HDR-notebooks"]
 	path = HDR-notebooks
 	url = git@github.com:VivianePons/HDR-notebooks.git
+[submodule "2024_ALEA"]
+	path = 2024_ALEA
+	url = git@github.com:VivianePons/2024_ALEA.git
