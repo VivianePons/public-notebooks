@@ -13,3 +13,6 @@
 [submodule "2024_Mumbai"]
 	path = 2024_Mumbai
 	url = git@github.com:VivianePons/2024_Mumbai.git
+[submodule "triangular-partitions"]
+	path = triangular-partitions
+	url = git@github.com:VivianePons/triangular-partitions.git
